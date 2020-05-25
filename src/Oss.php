@@ -28,7 +28,7 @@ class Oss
         if (!in_array($type, ['aliYun', 'qiNiu'])) {
             throw new \Exception('不存在oss名称');
         }
-        $className = "xyqWeb\\oss\\" . ucfirst($type);
+        $className = "xyqWeb\oss\drivers\\" . ucfirst($type);
         if (!class_exists($className)) {
             throw new \Exception('不存在oss对象');
         }
