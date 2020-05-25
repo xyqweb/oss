@@ -30,7 +30,8 @@ class AliYun extends OssFactory
         }
         $merchantId = $this->params['merchant_id'] ?? 0;
         $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
-        if (!$this->createDir($this->filePath)) {
+        $result = $this->createDir($this->filePath);
+        if ($result > 0) {
             throw new \Exception('创建上传目录失败');
         }
     }

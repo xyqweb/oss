@@ -140,26 +140,20 @@ abstract class OssFactory
         if (is_dir($path)) {
             return 0;
         }
-        for ($i = 0; $i < 3; $i++) {
-            try {
-                $result = mkdir($path, 0777, true);
-                if (true == $result && is_dir($path)) {
-                    return 0;
-                }
-            } catch (\Throwable $e) {
-                $message = $e->getMessage();
-                if (strpos($message, 'Permission denied')) {
-                    return 1;
-                } elseif (strpos($message, 'File exists')) {
-                    return 0;
-                }
+        $code = 2;
+        $result = @mkdir($path, 0777, true);
+        if (false == $result) {
+            $error = error_get_last();
+            $message = $error['message'] ?? '';
+            if (strpos($message, 'Permission denied')) {
+                $code = 1;
+            } elseif (strpos($message, 'File exists')) {
+                $code = 0;
             }
+        } elseif (is_dir($path)) {
+            $code = 0;
         }
-        if (is_dir($path)) {
-            return 0;
-        } else {
-            return 2;
-        }
+        return $code;
     }
 
     /**
