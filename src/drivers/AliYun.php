@@ -174,6 +174,7 @@ class AliYun extends OssFactory
     public function getSign() : array
     {
         try {
+            $filePath = str_replace($this->params['path'] . '/', '', $this->filePath);
             $response = [];
             $now = time();
             $expire = 3600;  //设置该policy超时时间是10s. 即这个policy过了这个有效时间，将不能访问。
@@ -181,12 +182,12 @@ class AliYun extends OssFactory
             $expiration = $this->gmtIso8601($end);
             $conditions = [
                 //最大文件大小.用户可以自己设置
-                [0 => 'content-length-range', 1 => 0, 2 => 20971520],
+                [0 => 'content-length-range', 1 => 0, 2 => 524288000],
                 /**
                  * 表示用户上传的数据，必须是以$filePath开始，不然上传会失败，这一步不是必须项，只是为了安全起见，防止用户通过policy上传到别人的目录。
                  * 特别注意，此处的'$key'是正确的，不允许解析成$key对应的值
                  */
-                [0 => 'starts-with', 1 => '$key', 2 => $this->filePath]
+                [0 => 'starts-with', 1 => '$key', 2 => $filePath]
             ];
             $policy = json_encode(['expiration' => $expiration, 'conditions' => $conditions]);
             $base64_policy = base64_encode($policy);
@@ -198,7 +199,7 @@ class AliYun extends OssFactory
             $response['signature'] = $signature;
             $response['expire'] = $end;
             $response['bucket'] = $this->params['bucket'];
-            $response['key'] = $this->filePath;  //这个参数是设置用户上传文件时指定的前缀。
+            $response['key'] = $filePath;  //这个参数是设置用户上传文件时指定的前缀。
             $response['region'] = $this->params['region'];//bucket 所在的区域, 默认 oss-cn-hangzhou
             return ['status' => 1, 'msg' => '请求成功', 'data' => $response];
         } catch (\Exception $e) {
