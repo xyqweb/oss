@@ -167,32 +167,27 @@ abstract class OssFactory
      */
     public function curlGet(string $url, int $time = 5)
     {
-        $proxySetting = $this->params['httpProxy'];
+        $proxySetting = $this->params['httpProxy'] ?? [];
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, $time);//超时时间
         curl_setopt($curl, CURLOPT_HEADER, 0);
-        if ('0.0.0.0' != $proxySetting['host']) {
+        if (isset($proxySetting['host']) && '0.0.0.0' != $proxySetting['host'] && isset($proxySetting['port'])) {
             curl_setopt($curl, CURLOPT_PROXY, $proxySetting['host']);
             curl_setopt($curl, CURLOPT_PROXYPORT, $proxySetting['port']);
         }
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, FALSE); // 对认证证书来源的检查
         curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, FALSE); // 从证书中检查SSL加密算法是否存在
         curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; MSIE 5.01; Windows NT 5.0)'); // 模拟用户使用的浏览器
-        curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json; charset=utf-8',
-            'Authorization: 8040568f5bac5b17cc9a30c0ad8e66bb'
-        ));
         $responseText = curl_exec($curl);
         $error = curl_errno($curl);
         curl_close($curl);
         //返回结果
         if ($error > 0) {
-            curl_close($curl);
-            return $responseText;
-        } else {
             throw new \Exception("curl error " . $error);
+        } else {
+            return $responseText;
         }
     }
 }
