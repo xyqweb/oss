@@ -157,12 +157,40 @@ abstract class OssFactory
     }
 
     /**
+     * 获取远程文件名称
+     *
+     * @author xyq
+     * @param string $url
+     * @param string $content_type
+     * @return string
+     */
+    protected function getRemoteFileName(string $url, string $content_type)
+    {
+        $urlInfo = parse_url($url);
+        $fileArray = explode('/', $urlInfo['path']);
+        $name = (string)end($fileArray);
+        if (empty($name)) {
+            $name = md5(microtime(true));
+        }
+        $originType = explode('/', $content_type);
+        $realType = end($originType);
+        if (!is_int(strpos($name, $realType))) {
+            $length = strpos($name, '.');
+            if (!is_int($length)) {
+                $length = strlen($name);
+            }
+            $name = substr($name, 0, $length) . '.' . $realType;
+        }
+        return $name;
+    }
+
+    /**
      * curlGet
      *
      * @author xyq
      * @param string $url
      * @param int $time
-     * @return bool|string
+     * @return array
      * @throws \Exception
      */
     public function curlGet(string $url, int $time = 5)
@@ -182,12 +210,15 @@ abstract class OssFactory
         curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; MSIE 5.01; Windows NT 5.0)'); // 模拟用户使用的浏览器
         $responseText = curl_exec($curl);
         $error = curl_errno($curl);
+        $responseHeader = curl_getinfo($curl);
         curl_close($curl);
         //返回结果
         if ($error > 0) {
             throw new \Exception("curl error " . $error);
-        } else {
-            return $responseText;
         }
+        if ($responseHeader['http_code'] != 200) {
+            throw new  \Exception("http error " . $responseHeader['http_code']);
+        }
+        return ['content' => $responseText, 'header' => $responseHeader];
     }
 }

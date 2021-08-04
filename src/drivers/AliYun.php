@@ -47,11 +47,10 @@ class AliYun extends OssFactory
     public function uploadRemoteFile(string $url, string $name = '') : array
     {
         try {
-            $fileArray = explode('/', $url);
-            $name = !empty($name) ? $name : end($fileArray);
-            $realFile = $this->filePath . $this->getName($name);
             $file = $this->curlGet($url);
-            if (file_put_contents($realFile, $file)) {
+            $name = !empty($name) ? $name : $this->getRemoteFileName($url, $file['header']['content_type']);
+            $realFile = $this->filePath . $this->getName($name);
+            if (file_put_contents($realFile, $file['content'])) {
                 return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
             }
             return ['status' => 0, 'msg' => '上传失败'];
