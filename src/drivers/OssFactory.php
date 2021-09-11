@@ -170,7 +170,7 @@ abstract class OssFactory
         $fileArray = explode('/', $urlInfo['path']);
         $name = (string)end($fileArray);
         if (empty($name)) {
-            $name = md5(microtime(true));
+            $name = md5(microtime());
         }
         $originType = explode('/', $content_type);
         $realType = end($originType);
