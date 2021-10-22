@@ -12,6 +12,9 @@
   "require": {
     "php": ">=7.1.0"
   },
+  "suggest": {
+    "aliyuncs/oss-sdk-php": "required when oss is not mounted to the server"
+  },
   "autoload": {
     "psr-4": {
       "xyqWeb\\oss\\": "src"
