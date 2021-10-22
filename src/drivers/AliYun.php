@@ -16,10 +16,27 @@ class AliYun extends OssFactory
      * @var string 文件路径
      */
     private $filePath;
+    /**
+     * @var string 临时文件路径
+     */
+    private $tempFilePath = '/tmp/oss';
+    /**
+     * @var bool 是否挂载到服务器
+     */
+    private $isMount = true;
+    /**
+     * @var bool 是否返回完整的地址
+     */
+    private $returnHost = false;
+    /**
+     * @var \OSS\OssClient
+     */
+    private $client;
 
     /**
      * AliYun constructor.
      * @param array $params
+     * @throws \OSS\Core\OssException
      * @throws \Exception
      */
     public function __construct(array $params)
@@ -28,11 +45,36 @@ class AliYun extends OssFactory
         if (!isset($this->params['path'])) {
             throw new \Exception('未找到oss路径');
         }
+        if (isset($this->params['isMount']) && is_bool($this->params['isMount'])) {
+            $this->isMount = $this->params['isMount'];
+        }
+        if (isset($this->params['returnHost']) && is_bool($this->params['returnHost'])) {
+            $this->returnHost = $this->params['returnHost'];
+        }
+        if ($this->isMount && !is_dir($this->params['path'])) {
+            $this->isMount = false;
+        }
         $merchantId = $this->params['merchant_id'] ?? 0;
-        $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
-        $result = $this->createDir($this->filePath);
-        if ($result > 0) {
-            throw new \Exception('创建上传目录失败');
+        if ($this->isMount) {
+            $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
+            $result = $this->createDir($this->filePath);
+            if ($result > 0) {
+                throw new \Exception('创建上传目录失败');
+            }
+        } else {
+            if (!class_exists('\OSS\OssClient')) {
+                throw new \Exception('请先安装aliyuncs/oss-sdk-php');
+            }
+            $this->filePath = vsprintf('image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
+            $this->client = new \OSS\OssClient($this->params['accessKeyId'], $this->params['accessKeySecret'], $this->params['endPoint']);
+            $this->client->setUseSSL(true);
+            if (!is_dir($this->tempFilePath)) {
+                $result = $this->createDir($this->tempFilePath);
+                if ($result > 0) {
+                    throw new \Exception('创建临时上传目录失败');
+                }
+            }
+            $this->tempFilePath .= '/';
         }
     }
 
@@ -49,13 +91,18 @@ class AliYun extends OssFactory
         try {
             $file = $this->curlGet($url);
             $name = !empty($name) ? $name : $this->getRemoteFileName($url, $file['header']['content_type']);
-            $realFile = $this->filePath . $this->getName($name);
-            if (file_put_contents($realFile, $file['content'])) {
+            $name = $this->getName($name);
+            $realFile = $this->filePath . $name;
+            if ($this->isMount && file_put_contents($realFile, $file['content'])) {
                 return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
+            } elseif (!$this->isMount && file_put_contents($this->tempFilePath . $name, $file['content'])) {
+                $tempFilePath = $this->tempFilePath . $name;
+                $this->uploadToRemoteOss($realFile, $tempFilePath);
+                return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath('/' . $realFile)]];
             }
             return ['status' => 0, 'msg' => '上传失败'];
         } catch (\Exception $e) {
-            return ['status' => 0, 'msg' => $e->getMessage()];
+            return ['status' => 0, 'msg' => '上传失败：' . $e->getMessage()];
         }
     }
 
@@ -77,18 +124,15 @@ class AliYun extends OssFactory
             $fileArray = explode('/', $filePath);
             $name = !empty($name) ? $name : end($fileArray);
             $realFile = $this->filePath . $this->getName($name);
-            if ($isKeepLocal) {
-                if (copy($filePath, $realFile)) {
-                    return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
-                }
-            } else {
-                if (rename($filePath, $realFile)) {
-                    return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
-                }
+            if ($this->isMount && $this->copyFileToOss($realFile, $filePath, $isKeepLocal)) {
+                return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
+            } elseif (!$this->isMount) {
+                $this->uploadToRemoteOss($realFile, $filePath, $isKeepLocal);
+                return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath('/' . $realFile)]];
             }
             return ['status' => 0, 'msg' => '上传失败'];
         } catch (\Exception $e) {
-            return ['status' => 0, 'msg' => $e->getMessage()];
+            return ['status' => 0, 'msg' => '上传失败：' . $e->getMessage()];
         }
     }
 
@@ -117,13 +161,38 @@ class AliYun extends OssFactory
             if (empty($name)) {
                 $name = $file['name'];
             }
-            $realFile = $this->filePath . $this->getName($name);
-            if (move_uploaded_file($file['tmp_name'], $realFile)) {
+            $name = $this->getName($name);
+            $realFile = $this->filePath . $name;
+            if ($this->isMount && move_uploaded_file($file['tmp_name'], $realFile)) {
                 return ['status' => 1, 'msg' => '', 'data' => ['url' => $this->getOssPath($realFile)]];
+            } elseif (!$this->isMount) {
+                $tempFilePath = $this->tempFilePath . $name;
+                if (!move_uploaded_file($file['tmp_name'], $tempFilePath)) {
+                    return ['status' => 0, 'msg' => '文件上传失败'];
+                }
+                $this->uploadToRemoteOss($realFile, $tempFilePath);
+                return ['status' => 1, 'msg' => '', 'data' => ['url' => $this->getOssPath('/' . $realFile)]];
             }
             return ['status' => 0, 'msg' => '上传失败'];
         } catch (\Exception $e) {
-            return ['status' => 0, 'msg' => $e->getMessage()];
+            return ['status' => 0, 'msg' => '上传失败：' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * 校验oss状态
+     *
+     * @author xyq
+     * @param array $oss_result
+     * @throws \Exception
+     */
+    private function checkOssResult(array $oss_result)
+    {
+        if (!isset($oss_result['info'])) {
+            throw new \Exception('oss响应结果异常');
+        }
+        if (!isset($oss_result['info']['http_code']) || !in_array($oss_result['info']['http_code'], [200, 204])) {
+            throw new \Exception('oss响应状态异常');
         }
     }
 
@@ -137,19 +206,85 @@ class AliYun extends OssFactory
     public function delFile(string $file) : array
     {
         try {
-            $file = trim($file, '/');
-            $realFile = $this->params['path'] . $file;
-            if (!file_exists($realFile)) {
-                return ['status' => 1, 'msg' => '文件不存在，无需删除'];
-            }
-            if (unlink($realFile)) {
-                return ['status' => 1, 'msg' => '文件删除成功'];
+            $file = str_replace($this->params['host'], '', $file);
+            if ($this->isMount) {
+                $realFile = $this->params['path'] . $file;
+                if (!file_exists($realFile)) {
+                    return ['status' => 1, 'msg' => '文件不存在，无需删除'];
+                }
+                if (unlink($realFile)) {
+                    return ['status' => 1, 'msg' => '文件删除成功'];
+                }
             } else {
-                return ['status' => 0, 'msg' => '文件删除失败'];
+                $file = trim($file, '/');
+                $result = $this->client->deleteObject($this->params['bucket'], $file);
+                $this->checkOssResult($result);
+                return ['status' => 1, 'msg' => '文件删除成功'];
             }
+            return ['status' => 0, 'msg' => '文件删除失败'];
         } catch (\Exception $e) {
-            return ['status' => 0, 'msg' => $e->getMessage()];
+            return ['status' => 0, 'msg' => '删除失败：' . $e->getMessage()];
         }
+    }
+
+    /**
+     * 获取临时访问URL
+     *
+     * @author xyq
+     * @param array $file
+     * @param int $expire_time
+     * @return array
+     */
+    public function getUrl(array $file, int $expire_time = 300)
+    {
+        try {
+            $final = [];
+            foreach ($file as $item) {
+                $tempFile = str_replace($this->params['host'] . '/', '', $item);;
+                $tempFile = ltrim($tempFile, '/');
+                $result = $this->client->signUrl($this->params['bucket'], $tempFile, $expire_time);
+                $final[$item] = $result;
+            }
+            return ['status' => 1, 'msg' => '', 'url' => $final];
+        } catch (\Exception $e) {
+            return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * 复制本地文件到oss内
+     *
+     * @author xyq
+     * @param string $remote_file
+     * @param string $local_file
+     * @param bool $keep_local_file
+     * @return bool
+     */
+    private function copyFileToOss(string $remote_file, string $local_file, bool $keep_local_file = false)
+    {
+        if ($keep_local_file && copy($local_file, $remote_file)) {
+            return true;
+        } elseif (!$keep_local_file && rename($local_file, $remote_file)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 上传远程oss
+     *
+     * @author xyq
+     * @param string $remote_file
+     * @param string $local_file
+     * @param bool $keep_local_file
+     * @throws \OSS\Core\OssException
+     * @throws \Exception
+     */
+    private function uploadToRemoteOss(string $remote_file, string $local_file, bool $keep_local_file = false)
+    {
+        $result = $this->client->uploadFile($this->params['bucket'], $remote_file, $local_file);
+        !$keep_local_file && unlink($local_file);
+        $this->checkOssResult($result);
     }
 
     /**
@@ -161,7 +296,7 @@ class AliYun extends OssFactory
      */
     private function getOssPath(string $filePath) : string
     {
-        return str_replace($this->params['path'], '', $filePath);
+        return ($this->returnHost ? $this->params['host'] : '') . str_replace($this->params['path'], '', $filePath);
     }
 
     /**
