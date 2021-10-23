@@ -249,6 +249,10 @@ class AliYun extends OssFactory
             }
             $file = trim($file, '/');
             $result = $this->client->signUrl($this->params['bucket'], $file, $expire_time);
+            $originHost = 'https://' . $this->params['bucket'] . '.' . $this->params['endPoint'];
+            if (0 === strpos($result, 'https://' . $this->params['bucket']) && $originHost != $this->params['host']) {
+                $result = str_replace($originHost, $this->params['host'], $result);
+            }
             return ['status' => 1, 'msg' => '', 'url' => $result];
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
