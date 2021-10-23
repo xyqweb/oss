@@ -311,12 +311,12 @@ class AliYun extends OssFactory
             $filePath = str_replace($this->params['path'] . '/', '', $this->filePath);
             $response = [];
             $now = time();
-            $expire = 3600;  //设置该policy超时时间是10s. 即这个policy过了这个有效时间，将不能访问。
+            $expire = $this->params['expireTime'] ?? 3600;  //设置该policy超时时间是10s. 即这个policy过了这个有效时间，将不能访问。
             $end = $now + $expire;
             $expiration = $this->gmtIso8601($end);
             $conditions = [
                 //最大文件大小.用户可以自己设置
-                [0 => 'content-length-range', 1 => 0, 2 => 524288000],
+                [0 => 'content-length-range', 1 => 0, 2 => $this->params['maxLength'] ?? 524288000],
                 /**
                  * 表示用户上传的数据，必须是以$filePath开始，不然上传会失败，这一步不是必须项，只是为了安全起见，防止用户通过policy上传到别人的目录。
                  * 特别注意，此处的'$key'是正确的，不允许解析成$key对应的值
