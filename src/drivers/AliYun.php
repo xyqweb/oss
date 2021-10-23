@@ -231,21 +231,25 @@ class AliYun extends OssFactory
      * 获取临时访问URL
      *
      * @author xyq
-     * @param array $file
+     * @param string $file
      * @param int $expire_time
      * @return array
      */
-    public function getUrl(array $file, int $expire_time = 300)
+    public function getUrl(string $file, int $expire_time = 300)
     {
         try {
-            $final = [];
-            foreach ($file as $item) {
-                $tempFile = str_replace($this->params['host'] . '/', '', $item);;
-                $tempFile = ltrim($tempFile, '/');
-                $result = $this->client->signUrl($this->params['bucket'], $tempFile, $expire_time);
-                $final[$item] = $result;
+            if (0 === strpos($file, 'http://')) {
+                $file = str_replace('http://', 'https://', $file);
             }
-            return ['status' => 1, 'msg' => '', 'url' => $final];
+            if (0 === strpos($file, 'https://')) {
+                $file = str_replace($this->params['host'] . '/', '', $file);
+                if (0 === strpos($file, 'http')) {
+                    return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+                }
+            }
+            $file = trim($file, '/');
+            $result = $this->client->signUrl($this->params['bucket'], $file, $expire_time);
+            return ['status' => 1, 'msg' => '', 'url' => $result];
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
         }
