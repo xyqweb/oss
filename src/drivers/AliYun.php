@@ -153,7 +153,7 @@ class AliYun extends OssFactory
             }
             $fileArray = explode('/', $filePath);
             $name = !empty($name) ? $name : end($fileArray);
-            $realPath = trim(trim($newBasePath), '/') . '/' . ($this->params['merchant_id'] ?? 0) . date('/Ymd/His') . '/' . mt_rand(100000, 999999);
+            $realPath = trim(trim($newBasePath), '/') . '/' . date('Ymd/His') . '/' . ($this->params['merchant_id'] ?? 0) . '/' . mt_rand(100000, 999999);
             $realFile = $realPath . '/' . $this->getName($name);
             if ($this->isMount && $this->copyFileToOss($realFile, $filePath, false)) {
                 return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
@@ -284,7 +284,7 @@ class AliYun extends OssFactory
             if (0 === strpos($result, 'https://' . $this->params['bucket']) && $originHost != $this->params['host']) {
                 $result = str_replace($originHost, $this->params['host'], $result);
             }
-            return ['status' => 1, 'msg' => '', 'url' => $result];
+            return ['status' => 1, 'msg' => '', 'url' => $result, 'data' => ['url' => $result]];
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
         }
