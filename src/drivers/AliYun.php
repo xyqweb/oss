@@ -137,6 +137,36 @@ class AliYun extends OssFactory
     }
 
     /**
+     * 上传本地特殊文件到oss
+     *
+     * @author xyq
+     * @param string $filePath 源文件路径
+     * @param string $newBasePath 新基础文件路径
+     * @return array
+     */
+    public function uploadLocalSpecialFile(string $filePath, string $newBasePath) : array
+    {
+        try {
+            if (!file_exists($filePath)) {
+                throw new \Exception('未找到您要上传的文件');
+            }
+            $fileArray = explode('/', $filePath);
+            $name = end($fileArray);
+            $realPath = trim(trim($newBasePath), '/') . '/' . date('Y-m-d/H');
+            $realFile = $realPath . '/' . $name;
+            if ($this->isMount && $this->copyFileToOss($realFile, $filePath, false)) {
+                return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
+            } elseif (!$this->isMount) {
+                $this->uploadToRemoteOss($realFile, $filePath, false);
+                return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath('/' . $realFile)]];
+            }
+            return ['status' => 0, 'msg' => '上传失败'];
+        } catch (\Exception $e) {
+            return ['status' => 0, 'msg' => '上传失败：' . $e->getMessage()];
+        }
+    }
+
+    /**
      * 前端form上传文件
      *
      * @author xyq

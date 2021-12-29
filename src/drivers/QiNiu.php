@@ -23,6 +23,11 @@ class QiNiu extends OssFactory
         // TODO: Implement uploadLocalFile() method.
     }
 
+    public function uploadLocalSpecialFile(string $filePath, string $newBasePath) : array
+    {
+        // TODO: Implement uploadLocalSpecialFile() method.
+    }
+
     public function delFile(string $file) : array
     {
         // TODO: Implement delFile() method.
