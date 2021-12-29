@@ -142,18 +142,19 @@ class AliYun extends OssFactory
      * @author xyq
      * @param string $filePath 源文件路径
      * @param string $newBasePath 新基础文件路径
+     * @param string $name 新文件名称，不填取原文件名
      * @return array
      */
-    public function uploadLocalSpecialFile(string $filePath, string $newBasePath) : array
+    public function uploadLocalSpecialFile(string $filePath, string $newBasePath, string $name = '') : array
     {
         try {
             if (!file_exists($filePath)) {
                 throw new \Exception('未找到您要上传的文件');
             }
             $fileArray = explode('/', $filePath);
-            $name = end($fileArray);
+            $name = !empty($name) ? $name : end($fileArray);
             $realPath = trim(trim($newBasePath), '/') . '/' . ($this->params['merchant_id'] ?? 0) . date('/Ymd/His') . '/' . mt_rand(100000, 999999);
-            $realFile = $realPath . '/' . $name;
+            $realFile = $realPath . '/' . $this->getName($name);
             if ($this->isMount && $this->copyFileToOss($realFile, $filePath, false)) {
                 return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
             } elseif (!$this->isMount) {

@@ -23,7 +23,7 @@ class QiNiu extends OssFactory
         // TODO: Implement uploadLocalFile() method.
     }
 
-    public function uploadLocalSpecialFile(string $filePath, string $newBasePath) : array
+    public function uploadLocalSpecialFile(string $filePath, string $newBasePath, string $name = '') : array
     {
         // TODO: Implement uploadLocalSpecialFile() method.
     }

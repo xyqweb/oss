@@ -49,9 +49,10 @@ abstract class OssFactory
      * @author xyq
      * @param string $filePath 本地文件地址
      * @param string $newBasePath 新基础文件路径
+     * @param string $name 重命名文件名称
      * @return array
      */
-    abstract public function uploadLocalSpecialFile(string $filePath, string $newBasePath) : array;
+    abstract public function uploadLocalSpecialFile(string $filePath, string $newBasePath, string $name) : array;
 
     /**
      * 删除oss文件
