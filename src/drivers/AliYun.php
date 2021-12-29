@@ -152,7 +152,7 @@ class AliYun extends OssFactory
             }
             $fileArray = explode('/', $filePath);
             $name = end($fileArray);
-            $realPath = trim(trim($newBasePath), '/') . '/' . date('Y-m-d/H');
+            $realPath = trim(trim($newBasePath), '/') . '/' . ($this->params['merchant_id'] ?? 0) . date('/Ymd/His') . '/' . mt_rand(100000, 999999);
             $realFile = $realPath . '/' . $name;
             if ($this->isMount && $this->copyFileToOss($realFile, $filePath, false)) {
                 return ['status' => 1, 'msg' => '上传成功', 'data' => ['url' => $this->getOssPath($realFile)]];
