@@ -13,11 +13,22 @@
     "php": ">=7.1.0"
   },
   "suggest": {
-    "aliyuncs/oss-sdk-php": "required when oss is not mounted to the server"
+    "aliyuncs/oss-sdk-php": "required when oss is not mounted to the server",
+    "qiniu/php-sdk": "required when oss is not mounted to the server"
   },
   "autoload": {
     "psr-4": {
       "xyqWeb\\oss\\": "src"
+    }
+  },
+  "repositories": {
+    "0": {
+      "type": "composer",
+      "url": "https://mirrors.aliyun.com/composer/"
+    },
+    "packagist": {
+      "type": "composer",
+      "url": "https://asset-packagist.org"
     }
   }
 }
