@@ -258,21 +258,10 @@ class QiNiu extends OssFactory
     public function getUrl(string $file, int $expire_time = 300)
     {
         try {
-            if (0 === strpos($file, 'http://')) {
-                $file = str_replace('http://', 'https://', $file);
+            if (0 !== strpos($file, $this->params['host'])) {
+                return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
-            if (0 === strpos($file, 'https://')) {
-                $file = str_replace($this->params['host'] . '/', '', $file);
-                if (0 === strpos($file, 'http')) {
-                    return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
-                }
-            }
-            $file = trim($file, '/');
             $result = $this->auth->privateDownloadUrl($file, $expire_time);
-            $originHost = 'https://' . $this->params['bucket'] . '.' . $this->params['endPoint'];
-            if (0 === strpos($result, 'https://' . $this->params['bucket']) && $originHost != $this->params['host']) {
-                $result = str_replace($originHost, $this->params['host'], $result);
-            }
             return ['status' => 1, 'msg' => '', 'url' => $result, 'data' => ['url' => $result]];
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
