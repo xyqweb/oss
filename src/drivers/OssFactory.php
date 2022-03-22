@@ -72,6 +72,15 @@ abstract class OssFactory
     abstract public function getSign() : array;
 
     /**
+     * 获取远程资源元信息
+     *
+     * @author xyq
+     * @param string $file
+     * @return array
+     */
+    abstract public function getStat(string $file):array;
+
+    /**
      * 获取上传文件错误消息
      *
      * @author xyq

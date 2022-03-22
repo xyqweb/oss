@@ -10,6 +10,13 @@ declare(strict_types = 1);
 namespace xyqWeb\oss\drivers;
 
 
+use Qiniu\Auth;
+use function Qiniu\base64_urlSafeEncode;
+use Qiniu\Config;
+use Qiniu\Processing\PersistentFop;
+use Qiniu\Storage\BucketManager;
+use Qiniu\Storage\UploadManager;
+
 class QiNiu extends OssFactory
 {
     /**
@@ -69,7 +76,7 @@ class QiNiu extends OssFactory
                 throw new \Exception('请先安装qiniu/php-sdk');
             }
             $this->filePath = vsprintf('image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
-            $this->auth = new \Qiniu\Auth($this->params['accessKeyId'], $this->params['accessKeySecret']);
+            $this->auth = new Auth($this->params['accessKeyId'], $this->params['accessKeySecret']);
             $this->token = $this->auth->uploadToken($this->params['bucket']);
             if (!is_dir($this->tempFilePath)) {
                 $result = $this->createDir($this->tempFilePath);
@@ -234,8 +241,7 @@ class QiNiu extends OssFactory
                 }
             } else {
                 $file = trim($file, '/');
-                $config = new \Qiniu\Config();
-                $bucketManager = new \Qiniu\Storage\BucketManager($this->auth, $config);
+                $bucketManager = new BucketManager($this->auth, new Config());
                 list($result, $error) = $bucketManager->delete($this->params['bucket'], $file);
                 if ($error == null && $result == null) {
                     return ['status' => 1, 'msg' => '文件删除成功'];
@@ -298,9 +304,9 @@ class QiNiu extends OssFactory
      */
     private function uploadToRemoteOss(string $remote_file, string $local_file, bool $keep_local_file = false)
     {
-        list($result, $error) = (new \Qiniu\Storage\UploadManager())->put($this->token, $remote_file, file_get_contents($local_file));
+        list($result, $error) = (new UploadManager())->put($this->token, $remote_file, file_get_contents($local_file));
         if ($error !== null) {
-            throw new \Exception($error);
+            throw new \Exception($error->message());
         }
         !$keep_local_file && unlink($local_file);
         if (!isset($result['key']) || empty($result['key'])) {
@@ -342,5 +348,91 @@ class QiNiu extends OssFactory
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => $e->getMessage()];
         }
+    }
+
+    /**
+     * 获取远程资源元信息
+     *
+     * @author xyq
+     * @param string $file
+     * @return array
+     */
+    public function getStat(string $file): array
+    {
+        $file = $this->getRealFile($file);
+        if (empty($file)) {
+            return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+        }
+        $bucketManager = new BucketManager($this->auth, new Config());
+        list($ret, $err) = $bucketManager->stat($this->params['bucket'], $file);
+        if (null !== $err) {
+            return ['status' => 0, 'msg' => $err->message()];
+        }
+        return ['status' => 1, 'msg' => '', 'data' => $ret];
+    }
+
+    /**
+     * 获取去除域名的最终地址
+     *
+     * @author xyq
+     * @param string $file
+     * @return string
+     */
+    private function getRealFile(string $file)
+    {
+        if (0 !== strpos($file, $this->params['host'])) {
+            return '';
+        }
+        return str_replace($this->params['host'] . '/', '', $file);
+    }
+
+    /**
+     * 合并视频
+     *
+     * @author xyq
+     * @param array $file_array
+     * @param string|null $callback_url
+     * @return array
+     */
+    public function mergeVideo(array $file_array, string $callback_url = null)
+    {
+        foreach ($file_array as $key => $item) {
+            $file_array[$key] = $this->getRealFile($item);
+        }
+        $bucketManager = new BucketManager($this->auth, new Config());
+        $ops = $bucketManager->buildBatchStat($this->params['bucket'], $file_array);
+        list($ret, $err) = $bucketManager->batch($ops);
+        if (null !== $err) {
+            return ['status' => 0, 'msg' => $err->message()];
+        }
+        $mimeType = array_column($ret, 'mimeType');
+        foreach ($mimeType as $item) {
+            if (0 !== strpos($item, 'video')) {
+                return ['status' => 0, 'msg' => '不是视频资源，无法继续合并'];
+            }
+        }
+        $fops = 'avconcat/1/format/mp4';
+        $first = '';
+        foreach ($file_array as $index => $item) {
+            if ($index === 0) {
+                $first = $item;
+                continue;
+            }
+            $fops .= '/' . base64_urlSafeEncode('kodo://' . $this->params['bucket'] . '/' . $item);
+        }
+        $savePath = 'video/merge/' . date('Ymd') . '/' . date('His');
+        if (isset($this->params['merchant_id'])) {
+            $savePath .= '/' . $this->params['merchant_id'] . '/';
+        } else {
+            $savePath .= '/0/';
+        }
+        $savePath .= microtime(true) . mt_rand(1000, 9999) . '.mp4';
+        $fops .= '|saveas/' . base64_urlSafeEncode($this->params['bucket'] . ':' . $savePath);
+        $pFop = new PersistentFop($this->auth, new Config());
+        list ($id, $err) = $pFop->execute($this->params['bucket'], $first, $fops, null, $callback_url);
+        if (null != $err) {
+            return ['status' => 0, 'msg' => '合并处理失败：' . $err->message()];
+        }
+        return ['status' => 1, 'msg' => '', 'data' => ['task_id' => $id, 'url' => $this->getOssPath('/' . $savePath)]];
     }
 }

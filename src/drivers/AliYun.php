@@ -396,4 +396,21 @@ class AliYun extends OssFactory
         $expiration = substr($expiration, 0, $pos);
         return $expiration . "Z";
     }
+
+    /**
+     * 获取远程资源元信息
+     *
+     * @author xyq
+     * @param string $file
+     * @return array
+     */
+    public function getStat(string $file): array
+    {
+        if (0 !== strpos($file, $this->params['host'])) {
+            return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+        }
+        $file = str_replace($this->params['host'] . '/', '', $file);
+        $result = $this->client->getObjectMeta($this->params['bucket'], $file);
+        return ['status' => 1, 'msg' => '', 'data' => $result];
+    }
 }
