@@ -19,15 +19,5 @@
     "psr-4": {
       "xyqWeb\\oss\\": "src"
     }
-  },
-  "repositories": {
-    "0": {
-      "type": "composer",
-      "url": "https://mirrors.aliyun.com/composer/"
-    },
-    "packagist": {
-      "type": "composer",
-      "url": "https://asset-packagist.org"
-    }
   }
 }
