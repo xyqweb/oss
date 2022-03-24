@@ -237,9 +237,12 @@ class AliYun extends OssFactory
     public function delFile(string $file) : array
     {
         try {
-            $file = str_replace($this->params['host'], '', $file);
+            $file = $this->getRealFile($file, $this->params['host']);
+            if (empty($file)) {
+                return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+            }
             if ($this->isMount) {
-                $realFile = $this->params['path'] . $file;
+                $realFile = $this->params['path'] . '/' . $file;
                 if (!file_exists($realFile)) {
                     return ['status' => 1, 'msg' => '文件不存在，无需删除'];
                 }
@@ -247,7 +250,6 @@ class AliYun extends OssFactory
                     return ['status' => 1, 'msg' => '文件删除成功'];
                 }
             } else {
-                $file = trim($file, '/');
                 $result = $this->client->deleteObject($this->params['bucket'], $file);
                 $this->checkOssResult($result);
                 return ['status' => 1, 'msg' => '文件删除成功'];
@@ -269,16 +271,10 @@ class AliYun extends OssFactory
     public function getUrl(string $file, int $expire_time = 300)
     {
         try {
-            if (0 === strpos($file, 'http://')) {
-                $file = str_replace('http://', 'https://', $file);
+            $file = $this->getRealFile($file, $this->params['host']);
+            if (empty($file)) {
+                return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
-            if (0 === strpos($file, 'https://')) {
-                $file = str_replace($this->params['host'] . '/', '', $file);
-                if (0 === strpos($file, 'http')) {
-                    return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
-                }
-            }
-            $file = trim($file, '/');
             $result = $this->client->signUrl($this->params['bucket'], $file, $expire_time);
             $originHost = 'https://' . $this->params['bucket'] . '.' . $this->params['endPoint'];
             if (0 === strpos($result, 'https://' . $this->params['bucket']) && $originHost != $this->params['host']) {
@@ -412,5 +408,32 @@ class AliYun extends OssFactory
         $file = str_replace($this->params['host'] . '/', '', $file);
         $result = $this->client->getObjectMeta($this->params['bucket'], $file);
         return ['status' => 1, 'msg' => '', 'data' => $result];
+    }
+
+    /**
+     * 批量删除文件
+     *
+     * @author xyq
+     * @param array $file
+     * @return array
+     */
+    public function batchDelFile(array $file)
+    {
+        $ossFile = [];
+        foreach ($file as $key => $item) {
+            $ossFile[$key] = $this->getRealFile($item, $this->params['host']);
+        }
+        $ossFile = array_filter($ossFile);
+        if (empty($ossFile) || count($file) != count($ossFile)) {
+            return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+        }
+        unset($file);
+        try {
+            $this->client->deleteObjects($this->params['bucket'], $ossFile);
+            unset($ossFile);
+            return ['status' => 1, 'msg' => '删除成功'];
+        } catch (\Exception $e) {
+            return ['status' => 0, 'msg' => '删除失败'];
+        }
     }
 }

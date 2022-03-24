@@ -205,6 +205,25 @@ abstract class OssFactory
     }
 
     /**
+     * 获取去除域名的最终地址
+     *
+     * @author xyq
+     * @param string $file
+     * @param string $host
+     * @return mixed|string
+     */
+    protected function getRealFile(string $file, string $host)
+    {
+        if (0 !== strpos($file, 'http')) {
+            return ltrim($file, '/');
+        }
+        if (0 !== strpos($file, $host)) {
+            return '';
+        }
+        return str_replace($host . '/', '', $file);
+    }
+
+    /**
      * curlGet
      *
      * @author xyq

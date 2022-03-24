@@ -12,7 +12,6 @@ namespace xyqWeb\oss\drivers;
 
 use Qiniu\Auth;
 use function Qiniu\base64_urlSafeEncode;
-use Qiniu\Config;
 use Qiniu\Processing\PersistentFop;
 use Qiniu\Storage\BucketManager;
 use Qiniu\Storage\UploadManager;
@@ -241,7 +240,7 @@ class QiNiu extends OssFactory
                 }
             } else {
                 $file = trim($file, '/');
-                $bucketManager = new BucketManager($this->auth, new Config());
+                $bucketManager = new BucketManager($this->auth);
                 list($result, $error) = $bucketManager->delete($this->params['bucket'], $file);
                 if ($error == null && $result == null) {
                     return ['status' => 1, 'msg' => '文件删除成功'];
@@ -359,31 +358,16 @@ class QiNiu extends OssFactory
      */
     public function getStat(string $file): array
     {
-        $file = $this->getRealFile($file);
+        $file = $this->getRealFile($file, $this->params['host']);
         if (empty($file)) {
             return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
         }
-        $bucketManager = new BucketManager($this->auth, new Config());
+        $bucketManager = new BucketManager($this->auth);
         list($ret, $err) = $bucketManager->stat($this->params['bucket'], $file);
         if (null !== $err) {
             return ['status' => 0, 'msg' => $err->message()];
         }
         return ['status' => 1, 'msg' => '', 'data' => $ret];
-    }
-
-    /**
-     * 获取去除域名的最终地址
-     *
-     * @author xyq
-     * @param string $file
-     * @return string
-     */
-    private function getRealFile(string $file)
-    {
-        if (0 !== strpos($file, $this->params['host'])) {
-            return '';
-        }
-        return str_replace($this->params['host'] . '/', '', $file);
     }
 
     /**
@@ -397,9 +381,9 @@ class QiNiu extends OssFactory
     public function mergeVideo(array $file_array, string $callback_url = null)
     {
         foreach ($file_array as $key => $item) {
-            $file_array[$key] = $this->getRealFile($item);
+            $file_array[$key] = $this->getRealFile($item, $this->params['host']);
         }
-        $bucketManager = new BucketManager($this->auth, new Config());
+        $bucketManager = new BucketManager($this->auth);
         $ops = $bucketManager->buildBatchStat($this->params['bucket'], $file_array);
         list($ret, $err) = $bucketManager->batch($ops);
         if (null !== $err) {
@@ -428,11 +412,51 @@ class QiNiu extends OssFactory
         }
         $savePath .= microtime(true) . mt_rand(1000, 9999) . '.mp4';
         $fops .= '|saveas/' . base64_urlSafeEncode($this->params['bucket'] . ':' . $savePath);
-        $pFop = new PersistentFop($this->auth, new Config());
+        $pFop = new PersistentFop($this->auth);
         list ($id, $err) = $pFop->execute($this->params['bucket'], $first, $fops, null, $callback_url);
         if (null != $err) {
             return ['status' => 0, 'msg' => '合并处理失败：' . $err->message()];
         }
         return ['status' => 1, 'msg' => '', 'data' => ['task_id' => $id, 'url' => $this->getOssPath('/' . $savePath)]];
+    }
+
+    /**
+     * 批量删除
+     *
+     * @author xyq
+     * @param array $file
+     * @return array
+     */
+    public function batchDelFile(array $file)
+    {
+        $ossFile = [];
+        foreach ($file as $key => $item) {
+            $ossFile[$key] = $this->getRealFile($item, $this->params['host']);
+        }
+        $ossFile = array_filter($ossFile);
+        if (empty($ossFile) || count($file) != count($ossFile)) {
+            return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
+        }
+        $bucketManager = new BucketManager($this->auth);
+        $ops = $bucketManager->buildBatchDelete($this->params['bucket'], $ossFile);
+        list ($result, $err) = $bucketManager->batch($ops);
+        unset($ossFile, $ops);
+        if (null != $err) {
+            return ['status' => 0, 'msg' => '删除失败'];
+        }
+        $success = [];
+        foreach ($file as $key => $item) {
+            if (isset($result[$key]['code']) && $result[$key]['code'] == 200) {
+                $success[] = $item;
+            }
+        }
+        if (count($success) == count($file)) {
+            $return = ['status' => 1, 'msg' => '删除成功'];
+        } elseif (count($success) > 0) {
+            $return = ['status' => 1, 'msg' => '部分删除成功', 'data' => $success];
+        } else {
+            $return = ['status' => 0, 'msg' => '删除失败'];
+        }
+        return $return;
     }
 }
