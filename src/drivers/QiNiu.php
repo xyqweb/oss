@@ -263,7 +263,8 @@ class QiNiu extends OssFactory
     public function getUrl(string $file, int $expire_time = 300)
     {
         try {
-            if (0 !== strpos($file, $this->params['host'])) {
+            $file = $this->getRealFile($file, $this->params['host']);
+            if (empty($file)) {
                 return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
             $result = $this->auth->privateDownloadUrl($file, $expire_time);
