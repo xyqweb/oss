@@ -267,7 +267,7 @@ class QiNiu extends OssFactory
             if (empty($file)) {
                 return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
-            $result = $this->auth->privateDownloadUrl($file, $expire_time);
+            $result = $this->auth->privateDownloadUrl($this->params['host'] . '/' . $file, $expire_time);
             return ['status' => 1, 'msg' => '', 'url' => $result, 'data' => ['url' => $result]];
         } catch (\Exception $e) {
             return ['status' => 0, 'msg' => '获取失败：' . $e->getMessage()];
