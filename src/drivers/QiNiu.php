@@ -245,6 +245,9 @@ class QiNiu extends OssFactory
                 if ($error == null && $result == null) {
                     return ['status' => 1, 'msg' => '文件删除成功'];
                 }
+                if ($error != null && $error->code() == 612) {
+                    return ['status' => 1, 'msg' => '文件删除成功'];
+                }
             }
             return ['status' => 0, 'msg' => '文件删除失败'];
         } catch (\Exception $e) {
@@ -447,7 +450,7 @@ class QiNiu extends OssFactory
         }
         $success = [];
         foreach ($file as $key => $item) {
-            if (isset($result[$key]['code']) && $result[$key]['code'] == 200) {
+            if (isset($result[$key]['code']) && in_array($result[$key]['code'], [200, 612])) {
                 $success[] = $item;
             }
         }
