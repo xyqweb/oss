@@ -39,7 +39,7 @@ class QiNiu extends OssFactory
      */
     private $token;
     /**
-     * @var string
+     * @var \Qiniu\Auth
      */
     private $auth;
 
@@ -63,20 +63,19 @@ class QiNiu extends OssFactory
         if ($this->isMount && !is_dir($this->params['path'])) {
             $this->isMount = false;
         }
-        $merchantId = $this->params['merchant_id'] ?? 0;
+        if (!isset($this->params['merchant_id'])) {
+            $this->params['merchant_id'] = 0;
+        } else {
+            $this->params['merchant_id'] = (int)$this->params['merchant_id'];
+        }
         if ($this->isMount) {
-            $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
+            $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$this->params['merchant_id'], date('Ymd'), date('His')]);
             $result = $this->createDir($this->filePath);
             if ($result > 0) {
                 throw new \Exception('创建上传目录失败');
             }
         } else {
-            if (!class_exists('\Qiniu\Storage\UploadManager')) {
-                throw new \Exception('请先安装qiniu/php-sdk');
-            }
-            $this->filePath = vsprintf('image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
-            $this->auth = new Auth($this->params['accessKeyId'], $this->params['accessKeySecret']);
-            $this->token = $this->auth->uploadToken($this->params['bucket']);
+            $this->createClient();
             if (!is_dir($this->tempFilePath)) {
                 $result = $this->createDir($this->tempFilePath);
                 if ($result > 0) {
@@ -85,6 +84,22 @@ class QiNiu extends OssFactory
             }
             $this->tempFilePath .= '/';
         }
+    }
+
+    /**
+     * 创建客户端
+     *
+     * @author xyq
+     * @throws \Exception
+     */
+    private function createClient()
+    {
+        if (!class_exists('\Qiniu\Storage\UploadManager')) {
+            throw new \Exception('请先安装qiniu/php-sdk');
+        }
+        $this->filePath = vsprintf('image/%d/%s/%s/', [$this->params['merchant_id'], date('Ymd'), date('His')]);
+        $this->auth = new Auth($this->params['accessKeyId'], $this->params['accessKeySecret']);
+        $this->token = $this->auth->uploadToken($this->params['bucket']);
     }
 
     /**
@@ -270,6 +285,7 @@ class QiNiu extends OssFactory
             if (empty($file)) {
                 return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
+            $this->isMount && $this->createClient();
             $result = $this->auth->privateDownloadUrl($this->params['host'] . '/' . $file, $expire_time);
             return ['status' => 1, 'msg' => '', 'url' => $result, 'data' => ['url' => $result]];
         } catch (\Exception $e) {
@@ -307,6 +323,7 @@ class QiNiu extends OssFactory
      */
     private function uploadToRemoteOss(string $remote_file, string $local_file, bool $keep_local_file = false)
     {
+        $this->isMount && $this->createClient();
         list($result, $error) = (new UploadManager())->put($this->token, $remote_file, file_get_contents($local_file));
         if ($error !== null) {
             throw new \Exception($error->message());
@@ -338,6 +355,7 @@ class QiNiu extends OssFactory
     public function getSign(): array
     {
         try {
+            $this->isMount && $this->createClient();
             $filePath = str_replace($this->params['path'] . '/', '', $this->filePath);
             $response = [];
             $now = time();
@@ -359,6 +377,7 @@ class QiNiu extends OssFactory
      * @author xyq
      * @param string $file
      * @return array
+     * @throws \Exception
      */
     public function getStat(string $file): array
     {
@@ -366,6 +385,7 @@ class QiNiu extends OssFactory
         if (empty($file)) {
             return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
         }
+        $this->isMount && $this->createClient();
         $bucketManager = new BucketManager($this->auth);
         list($ret, $err) = $bucketManager->stat($this->params['bucket'], $file);
         if (null !== $err) {
@@ -381,12 +401,14 @@ class QiNiu extends OssFactory
      * @param array $file_array
      * @param string|null $callback_url
      * @return array
+     * @throws \Exception
      */
     public function mergeVideo(array $file_array, string $callback_url = null)
     {
         foreach ($file_array as $key => $item) {
             $file_array[$key] = $this->getRealFile($item, $this->params['host']);
         }
+        $this->isMount && $this->createClient();
         $bucketManager = new BucketManager($this->auth);
         $ops = $bucketManager->buildBatchStat($this->params['bucket'], $file_array);
         list($ret, $err) = $bucketManager->batch($ops);
@@ -430,6 +452,7 @@ class QiNiu extends OssFactory
      * @author xyq
      * @param array $file
      * @return array
+     * @throws \Exception
      */
     public function batchDelFile(array $file)
     {
@@ -441,6 +464,7 @@ class QiNiu extends OssFactory
         if (empty($ossFile) || count($file) != count($ossFile)) {
             return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
         }
+        $this->isMount && $this->createClient();
         $bucketManager = new BucketManager($this->auth);
         $ops = $bucketManager->buildBatchDelete($this->params['bucket'], $ossFile);
         list ($result, $err) = $bucketManager->batch($ops);

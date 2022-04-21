@@ -54,20 +54,19 @@ class AliYun extends OssFactory
         if ($this->isMount && !is_dir($this->params['path'])) {
             $this->isMount = false;
         }
-        $merchantId = $this->params['merchant_id'] ?? 0;
+        if (!isset($this->params['merchant_id'])) {
+            $this->params['merchant_id'] = 0;
+        } else {
+            $this->params['merchant_id'] = (int)$this->params['merchant_id'];
+        }
         if ($this->isMount) {
-            $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
+            $this->filePath = $this->params['path'] . vsprintf('/image/%d/%s/%s/', [$this->params['merchant_id'], date('Ymd'), date('His')]);
             $result = $this->createDir($this->filePath);
             if ($result > 0) {
                 throw new \Exception('创建上传目录失败');
             }
         } else {
-            if (!class_exists('\OSS\OssClient')) {
-                throw new \Exception('请先安装aliyuncs/oss-sdk-php');
-            }
-            $this->filePath = vsprintf('image/%d/%s/%s/', [$merchantId, date('Ymd'), date('His')]);
-            $this->client = new \OSS\OssClient($this->params['accessKeyId'], $this->params['accessKeySecret'], $this->params['endPoint']);
-            $this->client->setUseSSL(true);
+            $this->createClient();
             if (!is_dir($this->tempFilePath)) {
                 $result = $this->createDir($this->tempFilePath);
                 if ($result > 0) {
@@ -76,6 +75,22 @@ class AliYun extends OssFactory
             }
             $this->tempFilePath .= '/';
         }
+    }
+
+    /**
+     * 创建客户端
+     *
+     * @author xyq
+     * @throws \OSS\Core\OssException
+     */
+    private function createClient()
+    {
+        if (!class_exists('\OSS\OssClient')) {
+            throw new \Exception('请先安装aliyuncs/oss-sdk-php');
+        }
+        $this->filePath = vsprintf('image/%d/%s/%s/', [$this->params['merchant_id'], date('Ymd'), date('His')]);
+        $this->client = new \OSS\OssClient($this->params['accessKeyId'], $this->params['accessKeySecret'], $this->params['endPoint']);
+        $this->client->setUseSSL(true);
     }
 
     /**
@@ -275,6 +290,7 @@ class AliYun extends OssFactory
             if (empty($file)) {
                 return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
             }
+            $this->isMount && $this->createClient();
             $result = $this->client->signUrl($this->params['bucket'], $file, $expire_time);
             $originHost = 'https://' . $this->params['bucket'] . '.' . $this->params['endPoint'];
             if (0 === strpos($result, 'https://' . $this->params['bucket']) && $originHost != $this->params['host']) {
@@ -317,6 +333,7 @@ class AliYun extends OssFactory
      */
     private function uploadToRemoteOss(string $remote_file, string $local_file, bool $keep_local_file = false)
     {
+        $this->isMount && $this->createClient();
         $result = $this->client->uploadFile($this->params['bucket'], $remote_file, $local_file);
         !$keep_local_file && unlink($local_file);
         $this->checkOssResult($result);
@@ -399,6 +416,7 @@ class AliYun extends OssFactory
      * @author xyq
      * @param string $file
      * @return array
+     * @throws \OSS\Core\OssException
      */
     public function getStat(string $file): array
     {
@@ -406,6 +424,7 @@ class AliYun extends OssFactory
             return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
         }
         $file = str_replace($this->params['host'] . '/', '', $file);
+        $this->isMount && $this->createClient();
         $result = $this->client->getObjectMeta($this->params['bucket'], $file);
         return ['status' => 1, 'msg' => '', 'data' => $result];
     }
@@ -416,6 +435,7 @@ class AliYun extends OssFactory
      * @author xyq
      * @param array $file
      * @return array
+     * @throws \OSS\Core\OssException
      */
     public function batchDelFile(array $file)
     {
@@ -427,6 +447,7 @@ class AliYun extends OssFactory
         if (empty($ossFile) || count($file) != count($ossFile)) {
             return ['status' => 0, 'msg' => '地址不属于当前oss，请检查后再试！'];
         }
+        $this->isMount && $this->createClient();
         unset($file);
         try {
             $this->client->deleteObjects($this->params['bucket'], $ossFile);
